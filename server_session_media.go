@@ -281,6 +281,30 @@ func (sm *serverSessionMedia) readPacketRTPUDPRecord(payload []byte) bool {
 		return false
 	}
 
+	// Fast-path SSRC check for CGNAT multi-publisher support
+	// Extract SSRC from RTP header (bytes 8-11) to check if this packet belongs to this session
+	// This prevents decode errors when multiple publishers share the same IP
+	// Only filter if we already know the remote SSRC (from RTCP)
+	if len(payload) >= 12 {
+		packetSSRC := uint32(payload[8])<<24 | uint32(payload[9])<<16 | uint32(payload[10])<<8 | uint32(payload[11])
+		// Check if we have any known remote SSRCs
+		hasAnyKnownSSRC := false
+		matchesAnyKnownSSRC := false
+		for _, format := range sm.formats {
+			if remoteSSRC, ok := format.remoteSSRC(); ok {
+				hasAnyKnownSSRC = true
+				if remoteSSRC == packetSSRC {
+					matchesAnyKnownSSRC = true
+					break
+				}
+			}
+		}
+		// If we have known SSRCs and packet doesn't match any of them, reject it
+		if hasAnyKnownSSRC && !matchesAnyKnownSSRC {
+			return false
+		}
+	}
+
 	pkt, err := sm.decodeRTP(payload)
 	if err != nil {
 		sm.onPacketRTPDecodeError(err)
