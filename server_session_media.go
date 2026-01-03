@@ -170,9 +170,9 @@ func (sm *serverSessionMedia) stop() {
 			sm.ss.s.udpRTPListener.removeClient(sm.ss.author.ip(), sm.udpRTPReadPort)
 			sm.ss.s.udpRTCPListener.removeClient(sm.ss.author.ip(), sm.udpRTCPReadPort)
 		} else {
-			// Use wildcard removal for record mode
-			sm.ss.s.udpRTPListener.removeClientWildcard(sm.ss.author.ip())
-			sm.ss.s.udpRTCPListener.removeClientWildcard(sm.ss.author.ip())
+			// Use wildcard removal for record mode - pass the callback to identify which one to remove
+			sm.ss.s.udpRTPListener.removeClientWildcard(sm.ss.author.ip(), sm.readPacketRTPUDPRecord)
+			sm.ss.s.udpRTCPListener.removeClientWildcard(sm.ss.author.ip(), sm.readPacketRTCPUDPRecord)
 		}
 	}
 

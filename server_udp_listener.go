@@ -74,8 +74,9 @@ type serverUDPListener struct {
 	listenIP     net.IP
 	clientsMutex sync.RWMutex
 	clients      map[clientAddr]readFunc
-	// ipWildcardClients maps IP to callback for packets from any port (CGNAT support)
-	ipWildcardClients map[[net.IPv6len]byte]readFunc
+	// ipWildcardClients maps IP to list of callbacks for packets from any port (CGNAT support)
+	// Supports multiple publishers from the same IP
+	ipWildcardClients map[[net.IPv6len]byte][]readFunc
 
 	done chan struct{}
 }
@@ -123,7 +124,7 @@ func (u *serverUDPListener) initialize() error {
 	}
 
 	u.clients = make(map[clientAddr]readFunc)
-	u.ipWildcardClients = make(map[[net.IPv6len]byte]readFunc)
+	u.ipWildcardClients = make(map[[net.IPv6len]byte][]readFunc)
 	u.done = make(chan struct{})
 
 	go u.run()
@@ -179,10 +180,18 @@ func (u *serverUDPListener) run() {
 				} else {
 					copy(ipKey[:], addr.IP)
 				}
-				cb, ok = u.ipWildcardClients[ipKey]
+				callbacks, ok := u.ipWildcardClients[ipKey]
 				if !ok {
 					return
 				}
+				// Try each callback until one accepts the packet
+				for _, cb = range callbacks {
+					if cb(buf[:n]) {
+						createNewBuffer()
+						break
+					}
+				}
+				return
 			}
 
 			if cb(buf[:n]) {
@@ -233,11 +242,11 @@ func (u *serverUDPListener) addClientWildcard(ip net.IP, cb readFunc) {
 	u.clientsMutex.Lock()
 	defer u.clientsMutex.Unlock()
 
-	u.ipWildcardClients[ipKey] = cb
+	u.ipWildcardClients[ipKey] = append(u.ipWildcardClients[ipKey], cb)
 }
 
-// removeClientWildcard removes a wildcard client
-func (u *serverUDPListener) removeClientWildcard(ip net.IP) {
+// removeClientWildcard removes a specific wildcard client callback
+func (u *serverUDPListener) removeClientWildcard(ip net.IP, cb readFunc) {
 	var ipKey [net.IPv6len]byte
 	if len(ip) == net.IPv4len {
 		copy(ipKey[0:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff})
@@ -249,5 +258,22 @@ func (u *serverUDPListener) removeClientWildcard(ip net.IP) {
 	u.clientsMutex.Lock()
 	defer u.clientsMutex.Unlock()
 
-	delete(u.ipWildcardClients, ipKey)
+	// Remove only this specific callback from the slice
+	callbacks := u.ipWildcardClients[ipKey]
+	for i, c := range callbacks {
+		// Compare by checking if both functions are the same
+		// Use a simple comparison since function pointers can be compared directly
+		fn1 := fmt.Sprintf("%p", c)
+		fn2 := fmt.Sprintf("%p", cb)
+		if fn1 == fn2 {
+			// Remove this callback by slicing it out
+			u.ipWildcardClients[ipKey] = append(callbacks[:i], callbacks[i+1:]...)
+			break
+		}
+	}
+
+	// If no callbacks left, clean up the entry
+	if len(u.ipWildcardClients[ipKey]) == 0 {
+		delete(u.ipWildcardClients, ipKey)
+	}
 }
