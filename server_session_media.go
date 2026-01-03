@@ -139,8 +139,9 @@ func (sm *serverSessionMedia) start() error {
 					return err
 				}
 
-				sm.ss.s.udpRTPListener.addClient(sm.ss.author.ip(), sm.udpRTPReadPort, sm.readPacketRTPUDPRecord)
-				sm.ss.s.udpRTCPListener.addClient(sm.ss.author.ip(), sm.udpRTCPReadPort, sm.readPacketRTCPUDPRecord)
+				// Use wildcard client for record mode to support CGNAT (accept packets from any port)
+				sm.ss.s.udpRTPListener.addClientWildcard(sm.ss.author.ip(), sm.readPacketRTPUDPRecord)
+				sm.ss.s.udpRTCPListener.addClientWildcard(sm.ss.author.ip(), sm.readPacketRTCPUDPRecord)
 			}
 		}
 
@@ -165,8 +166,14 @@ func (sm *serverSessionMedia) start() error {
 
 func (sm *serverSessionMedia) stop() {
 	if *sm.ss.setuppedTransport == TransportUDP {
-		sm.ss.s.udpRTPListener.removeClient(sm.ss.author.ip(), sm.udpRTPReadPort)
-		sm.ss.s.udpRTCPListener.removeClient(sm.ss.author.ip(), sm.udpRTCPReadPort)
+		if sm.ss.state == ServerSessionStatePlay {
+			sm.ss.s.udpRTPListener.removeClient(sm.ss.author.ip(), sm.udpRTPReadPort)
+			sm.ss.s.udpRTCPListener.removeClient(sm.ss.author.ip(), sm.udpRTCPReadPort)
+		} else {
+			// Use wildcard removal for record mode
+			sm.ss.s.udpRTPListener.removeClientWildcard(sm.ss.author.ip())
+			sm.ss.s.udpRTCPListener.removeClientWildcard(sm.ss.author.ip())
+		}
 	}
 
 	for _, sf := range sm.formats {

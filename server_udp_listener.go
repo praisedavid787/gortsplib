@@ -74,6 +74,8 @@ type serverUDPListener struct {
 	listenIP     net.IP
 	clientsMutex sync.RWMutex
 	clients      map[clientAddr]readFunc
+	// ipWildcardClients maps IP to callback for packets from any port (CGNAT support)
+	ipWildcardClients map[[net.IPv6len]byte]readFunc
 
 	done chan struct{}
 }
@@ -121,6 +123,7 @@ func (u *serverUDPListener) initialize() error {
 	}
 
 	u.clients = make(map[clientAddr]readFunc)
+	u.ipWildcardClients = make(map[[net.IPv6len]byte]readFunc)
 	u.done = make(chan struct{})
 
 	go u.run()
@@ -166,8 +169,20 @@ func (u *serverUDPListener) run() {
 			var ca clientAddr
 			ca.fill(addr.IP, addr.Port)
 			cb, ok := u.clients[ca]
+
+			// If not found in exact IP:port map, check IP wildcard map (CGNAT support)
 			if !ok {
-				return
+				var ipKey [net.IPv6len]byte
+				if len(addr.IP) == net.IPv4len {
+					copy(ipKey[0:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff})
+					copy(ipKey[12:], addr.IP)
+				} else {
+					copy(ipKey[:], addr.IP)
+				}
+				cb, ok = u.ipWildcardClients[ipKey]
+				if !ok {
+					return
+				}
 			}
 
 			if cb(buf[:n]) {
@@ -203,4 +218,36 @@ func (u *serverUDPListener) removeClient(ip net.IP, port int) {
 	defer u.clientsMutex.Unlock()
 
 	delete(u.clients, addr)
+}
+
+// addClientWildcard adds a client that accepts packets from any port (for CGNAT support)
+func (u *serverUDPListener) addClientWildcard(ip net.IP, cb readFunc) {
+	var ipKey [net.IPv6len]byte
+	if len(ip) == net.IPv4len {
+		copy(ipKey[0:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff})
+		copy(ipKey[12:], ip)
+	} else {
+		copy(ipKey[:], ip)
+	}
+
+	u.clientsMutex.Lock()
+	defer u.clientsMutex.Unlock()
+
+	u.ipWildcardClients[ipKey] = cb
+}
+
+// removeClientWildcard removes a wildcard client
+func (u *serverUDPListener) removeClientWildcard(ip net.IP) {
+	var ipKey [net.IPv6len]byte
+	if len(ip) == net.IPv4len {
+		copy(ipKey[0:], []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff})
+		copy(ipKey[12:], ip)
+	} else {
+		copy(ipKey[:], ip)
+	}
+
+	u.clientsMutex.Lock()
+	defer u.clientsMutex.Unlock()
+
+	delete(u.ipWildcardClients, ipKey)
 }
