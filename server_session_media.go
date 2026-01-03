@@ -183,9 +183,11 @@ func (sm *serverSessionMedia) stop() {
 
 func (sm *serverSessionMedia) findFormatByRemoteSSRC(ssrc uint32) *serverSessionFormat {
 	for _, format := range sm.formats {
-		stats := format.rtcpReceiver.Stats()
-		if stats != nil && stats.RemoteSSRC == ssrc {
-			return format
+		if format.rtcpReceiver != nil {
+			stats := format.rtcpReceiver.Stats()
+			if stats != nil && stats.RemoteSSRC == ssrc {
+				return format
+			}
 		}
 	}
 	return nil
