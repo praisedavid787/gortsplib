@@ -1782,6 +1782,9 @@ func (ss *ServerSession) PacketPTS2(medi *description.Media, pkt *rtp.Packet) (i
 func (ss *ServerSession) PacketNTP(medi *description.Media, pkt *rtp.Packet) (time.Time, bool) {
 	sm := ss.setuppedMedias[medi]
 	sf := sm.formats[pkt.PayloadType]
+	if sf.rtcpReceiver == nil {
+		return time.Time{}, false
+	}
 	return sf.rtcpReceiver.PacketNTP(pkt.Timestamp)
 }
 
