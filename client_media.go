@@ -259,7 +259,7 @@ func (cm *clientMedia) decodeRTCP(payload []byte) ([]rtcp.Packet, error) {
 	return pkts, nil
 }
 
-func (cm *clientMedia) readPacketRTPTCPPlay(payload []byte) bool {
+func (cm *clientMedia) readPacketRTPTCPPlay(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(cm.bytesReceived, uint64(len(payload)))
 
 	now := cm.c.timeNow()
@@ -282,7 +282,7 @@ func (cm *clientMedia) readPacketRTPTCPPlay(payload []byte) bool {
 	return true
 }
 
-func (cm *clientMedia) readPacketRTCPTCPPlay(payload []byte) bool {
+func (cm *clientMedia) readPacketRTCPTCPPlay(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(cm.bytesReceived, uint64(len(payload)))
 
 	now := cm.c.timeNow()
@@ -315,11 +315,11 @@ func (cm *clientMedia) readPacketRTCPTCPPlay(payload []byte) bool {
 	return true
 }
 
-func (cm *clientMedia) readPacketRTPTCPRecord(_ []byte) bool {
+func (cm *clientMedia) readPacketRTPTCPRecord(_ []byte, addr *net.UDPAddr) bool {
 	return false
 }
 
-func (cm *clientMedia) readPacketRTCPTCPRecord(payload []byte) bool {
+func (cm *clientMedia) readPacketRTCPTCPRecord(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(cm.bytesReceived, uint64(len(payload)))
 
 	if len(payload) > udpMaxPayloadSize {
@@ -342,7 +342,7 @@ func (cm *clientMedia) readPacketRTCPTCPRecord(payload []byte) bool {
 	return true
 }
 
-func (cm *clientMedia) readPacketRTPUDPPlay(payload []byte) bool {
+func (cm *clientMedia) readPacketRTPUDPPlay(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(cm.bytesReceived, uint64(len(payload)))
 
 	if len(payload) == (udpMaxPayloadSize + 1) {
@@ -367,7 +367,7 @@ func (cm *clientMedia) readPacketRTPUDPPlay(payload []byte) bool {
 	return true
 }
 
-func (cm *clientMedia) readPacketRTCPUDPPlay(payload []byte) bool {
+func (cm *clientMedia) readPacketRTCPUDPPlay(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(cm.bytesReceived, uint64(len(payload)))
 
 	if len(payload) == (udpMaxPayloadSize + 1) {
@@ -399,11 +399,11 @@ func (cm *clientMedia) readPacketRTCPUDPPlay(payload []byte) bool {
 	return true
 }
 
-func (cm *clientMedia) readPacketRTPUDPRecord(_ []byte) bool {
+func (cm *clientMedia) readPacketRTPUDPRecord(_ []byte, addr *net.UDPAddr) bool {
 	return false
 }
 
-func (cm *clientMedia) readPacketRTCPUDPRecord(payload []byte) bool {
+func (cm *clientMedia) readPacketRTCPUDPRecord(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(cm.bytesReceived, uint64(len(payload)))
 
 	if len(payload) == (udpMaxPayloadSize + 1) {

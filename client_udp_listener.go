@@ -147,7 +147,7 @@ func (u *clientUDPListener) run() {
 		now := u.c.timeNow()
 		atomic.StoreInt64(u.lastPacketTime, now.Unix())
 
-		if u.readFunc(buf[:n]) {
+		if u.readFunc(buf[:n], uaddr) {
 			createNewBuffer()
 		}
 	}

@@ -28,7 +28,9 @@ import (
 	"github.com/bluenviron/gortsplib/v4/pkg/sdp"
 )
 
-type readFunc func([]byte) bool
+// readFunc is a callback called when a packet is received.
+// data is the packet payload, addr is the source address (for CGNAT port learning).
+type readFunc func(data []byte, addr *net.UDPAddr) bool
 
 func stringsReverseIndex(s, substr string) int {
 	for i := len(s) - 1 - len(substr); i >= 0; i-- {

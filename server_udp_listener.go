@@ -185,8 +185,9 @@ func (u *serverUDPListener) run() {
 					return
 				}
 				// Try each callback until one accepts the packet
+				// Pass source address for CGNAT port learning
 				for _, cb = range callbacks {
-					if cb(buf[:n]) {
+					if cb(buf[:n], addr) {
 						createNewBuffer()
 						break
 					}
@@ -194,7 +195,8 @@ func (u *serverUDPListener) run() {
 				return
 			}
 
-			if cb(buf[:n]) {
+			// Pass source address for CGNAT port learning
+			if cb(buf[:n], addr) {
 				createNewBuffer()
 			}
 		}()

@@ -71,7 +71,7 @@ func (r *clientReader) runInner() error {
 			}
 
 			if cb, ok := r.c.tcpCallbackByChannel[what.Channel]; ok {
-				cb(what.Payload)
+				cb(what.Payload, nil) // No source address for TCP
 			}
 			r.mutex.Unlock()
 		}

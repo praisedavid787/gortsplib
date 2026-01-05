@@ -35,6 +35,11 @@ type serverSessionMedia struct {
 	rtcpPacketsReceived    *uint64
 	rtcpPacketsSent        *uint64
 	rtcpPacketsInError     *uint64
+
+	// CGNAT support: Track actual source ports from received packets
+	learnedSourceAddr    bool   // Whether we've learned the actual source address
+	actualSourceRTPPort  int    // Actual RTP port from received packets
+	actualSourceRTCPPort int    // Actual RTCP port from received packets
 }
 
 func (sm *serverSessionMedia) initialize() error {
@@ -224,7 +229,7 @@ func (sm *serverSessionMedia) decodeRTCP(payload []byte) ([]rtcp.Packet, error) 
 	return pkts, nil
 }
 
-func (sm *serverSessionMedia) readPacketRTPUDPPlay(payload []byte) bool {
+func (sm *serverSessionMedia) readPacketRTPUDPPlay(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(sm.bytesReceived, uint64(len(payload)))
 
 	if len(payload) == (udpMaxPayloadSize + 1) {
@@ -249,7 +254,7 @@ func (sm *serverSessionMedia) readPacketRTPUDPPlay(payload []byte) bool {
 	return true
 }
 
-func (sm *serverSessionMedia) readPacketRTCPUDPPlay(payload []byte) bool {
+func (sm *serverSessionMedia) readPacketRTCPUDPPlay(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(sm.bytesReceived, uint64(len(payload)))
 
 	if len(payload) == (udpMaxPayloadSize + 1) {
@@ -275,12 +280,28 @@ func (sm *serverSessionMedia) readPacketRTCPUDPPlay(payload []byte) bool {
 	return true
 }
 
-func (sm *serverSessionMedia) readPacketRTPUDPRecord(payload []byte) bool {
+func (sm *serverSessionMedia) readPacketRTPUDPRecord(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(sm.bytesReceived, uint64(len(payload)))
 
 	if len(payload) == (udpMaxPayloadSize + 1) {
 		sm.onPacketRTPDecodeError(liberrors.ErrServerRTPPacketTooBigUDP{})
 		return false
+	}
+
+	// CGNAT port learning: Update write addresses on first packet
+	if !sm.learnedSourceAddr && addr != nil {
+		sm.learnedSourceAddr = true
+		sm.actualSourceRTPPort = addr.Port
+
+		// Update RTP write address to use actual source port
+		sm.udpRTPWriteAddr.Port = addr.Port
+
+		// Assume RTCP port is RTP+1 (will be updated when we receive RTCP)
+		sm.actualSourceRTCPPort = addr.Port + 1
+		sm.udpRTCPWriteAddr.Port = addr.Port + 1
+
+		log.Printf("[RTSP] Learned CGNAT RTP port: %d (announced: %d), updating write address",
+			addr.Port, sm.udpRTPReadPort)
 	}
 
 	// Fast-path SSRC check for CGNAT multi-publisher support
@@ -327,12 +348,21 @@ func (sm *serverSessionMedia) readPacketRTPUDPRecord(payload []byte) bool {
 	return true
 }
 
-func (sm *serverSessionMedia) readPacketRTCPUDPRecord(payload []byte) bool {
+func (sm *serverSessionMedia) readPacketRTCPUDPRecord(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(sm.bytesReceived, uint64(len(payload)))
 
 	if len(payload) == (udpMaxPayloadSize + 1) {
 		sm.onPacketRTCPDecodeError(liberrors.ErrServerRTCPPacketTooBigUDP{})
 		return false
+	}
+
+	// CGNAT port learning: Update RTCP write address on first RTCP packet
+	if sm.learnedSourceAddr && addr != nil && addr.Port != sm.actualSourceRTCPPort {
+		sm.actualSourceRTCPPort = addr.Port
+		sm.udpRTCPWriteAddr.Port = addr.Port
+
+		log.Printf("[RTSP] Learned CGNAT RTCP port: %d (assumed RTP+1: %d), updating write address",
+			addr.Port, sm.actualSourceRTPPort+1)
 	}
 
 	packets, err := sm.decodeRTCP(payload)
@@ -360,7 +390,7 @@ func (sm *serverSessionMedia) readPacketRTCPUDPRecord(payload []byte) bool {
 	return true
 }
 
-func (sm *serverSessionMedia) readPacketRTPTCPPlay(payload []byte) bool {
+func (sm *serverSessionMedia) readPacketRTPTCPPlay(payload []byte, addr *net.UDPAddr) bool {
 	if !sm.media.IsBackChannel {
 		return false
 	}
@@ -384,7 +414,7 @@ func (sm *serverSessionMedia) readPacketRTPTCPPlay(payload []byte) bool {
 	return true
 }
 
-func (sm *serverSessionMedia) readPacketRTCPTCPPlay(payload []byte) bool {
+func (sm *serverSessionMedia) readPacketRTCPTCPPlay(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(sm.bytesReceived, uint64(len(payload)))
 
 	if len(payload) > udpMaxPayloadSize {
@@ -407,7 +437,7 @@ func (sm *serverSessionMedia) readPacketRTCPTCPPlay(payload []byte) bool {
 	return true
 }
 
-func (sm *serverSessionMedia) readPacketRTPTCPRecord(payload []byte) bool {
+func (sm *serverSessionMedia) readPacketRTPTCPRecord(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(sm.bytesReceived, uint64(len(payload)))
 
 	pkt, err := sm.decodeRTP(payload)
@@ -427,7 +457,7 @@ func (sm *serverSessionMedia) readPacketRTPTCPRecord(payload []byte) bool {
 	return true
 }
 
-func (sm *serverSessionMedia) readPacketRTCPTCPRecord(payload []byte) bool {
+func (sm *serverSessionMedia) readPacketRTCPTCPRecord(payload []byte, addr *net.UDPAddr) bool {
 	atomic.AddUint64(sm.bytesReceived, uint64(len(payload)))
 
 	if len(payload) > udpMaxPayloadSize {
