@@ -376,6 +376,9 @@ func (sm *serverSessionMedia) readPacketRTCPUDPRecord(payload []byte, addr *net.
 
 	atomic.AddUint64(sm.rtcpPacketsReceived, uint64(len(packets)))
 
+	log.Printf("[RTSP] Received RTCP packet from %s:%d (RECORD mode), %d packets",
+		addr.IP.String(), addr.Port, len(packets))
+
 	for _, pkt := range packets {
 		if sr, ok := pkt.(*rtcp.SenderReport); ok {
 			format := sm.findFormatByRemoteSSRC(sr.SSRC)
@@ -564,8 +567,13 @@ func (sm *serverSessionMedia) writePacketRTCPEncoded(payload []byte) error {
 }
 
 func (sm *serverSessionMedia) writePacketRTCPInQueueUDP(payload []byte) error {
+	log.Printf("[RTSP] Sending RTCP packet to %s:%d (%d bytes)",
+		sm.udpRTCPWriteAddr.IP.String(), sm.udpRTCPWriteAddr.Port, len(payload))
+
 	err := sm.ss.s.udpRTCPListener.write(payload, sm.udpRTCPWriteAddr)
 	if err != nil {
+		log.Printf("[RTSP] ERROR sending RTCP to %s:%d: %v",
+			sm.udpRTCPWriteAddr.IP.String(), sm.udpRTCPWriteAddr.Port, err)
 		return err
 	}
 
