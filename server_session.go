@@ -916,11 +916,13 @@ func (ss *ServerSession) runInner() error {
 		case sc := <-ss.chRemoveConn:
 			delete(ss.conns, sc)
 
-			// if session is not in state RECORD or PLAY, or transport is TCP,
+			// if session is not in state PLAY with UDP transport,
 			// and there are no associated connections,
 			// close the session.
-			if ((ss.state != ServerSessionStateRecord &&
-				ss.state != ServerSessionStatePlay) ||
+			// UDP RECORD (publisher) sessions are closed immediately on TCP disconnect
+			// to prevent stale audio from being served after the publisher drops.
+			// UDP PLAY (listener) sessions survive TCP drops to allow signaling reconnects.
+			if ((ss.state != ServerSessionStatePlay) ||
 				*ss.setuppedTransport == TransportTCP) &&
 				len(ss.conns) == 0 {
 				return liberrors.ErrServerSessionNotInUse{}
