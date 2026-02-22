@@ -371,8 +371,13 @@ func (sm *serverSessionMedia) readPacketRTCPUDPRecord(payload []byte, addr *net.
 		return false
 	}
 
+	// Do NOT update udpLastPacketTime here.
+	// For RECORD sessions, liveness is determined by incoming RTP packets only.
+	// Updating on RTCP SR would create a keepalive loop: the server sends RTCP RR
+	// every 10s → publisher responds with RTCP SR → session stays alive even when
+	// the publisher has stopped sending RTP audio. With RTP-only liveness, the
+	// session times out (ReadTimeout) within seconds of RTP stopping.
 	now := sm.ss.s.timeNow()
-	atomic.StoreInt64(sm.ss.udpLastPacketTime, now.Unix())
 
 	atomic.AddUint64(sm.rtcpPacketsReceived, uint64(len(packets)))
 
