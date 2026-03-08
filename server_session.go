@@ -943,6 +943,18 @@ func (ss *ServerSession) runInner() error {
 			// in case of RECORD, timeout happens when no RTP or RTCP packets are being received
 			if ss.state == ServerSessionStateRecord {
 				if now.Sub(time.Unix(lft, 0)) >= ss.s.ReadTimeout {
+					// best-effort: send a TEARDOWN response to the publisher's TCP
+					// signaling connection before closing, so TCP monitors get a
+					// clean, parseable signal instead of an abrupt RST.
+					for sc := range ss.conns {
+						sc.nconn.SetWriteDeadline(time.Now().Add(1 * time.Second))
+						_ = sc.conn.WriteResponse(&base.Response{
+							StatusCode: base.StatusOK,
+							Header: base.Header{
+								"Server": base.HeaderValue{serverHeader},
+							},
+						})
+					}
 					return liberrors.ErrServerSessionTimedOut{}
 				}
 
