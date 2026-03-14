@@ -107,7 +107,11 @@ func (cr *serverConnReader) readFuncTCP() error {
 
 	for {
 		if cr.sc.session.state == ServerSessionStateRecord {
-			cr.sc.nconn.SetReadDeadline(time.Now().Add(cr.sc.s.ReadTimeout))
+			rt := cr.sc.s.ReadTimeout
+			if cr.sc.session.ReadTimeout != 0 {
+				rt = cr.sc.session.ReadTimeout
+			}
+			cr.sc.nconn.SetReadDeadline(time.Now().Add(rt))
 		}
 
 		what, err := cr.sc.conn.Read()

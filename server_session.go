@@ -451,6 +451,10 @@ type ServerSession struct {
 	tcpFrame              *base.InterleavedFrame
 	tcpBuffer             []byte
 
+	// ReadTimeout overrides the server-level ReadTimeout for this session when non-zero.
+	// Set before the session transitions to Record state.
+	ReadTimeout time.Duration
+
 	// in
 	chHandleRequest    chan sessionRequestReq
 	chRemoveConn       chan *ServerConn
