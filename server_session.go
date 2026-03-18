@@ -1581,6 +1581,11 @@ func (ss *ServerSession) handleRequestInner(sc *ServerConn, req *base.Request) (
 
 			default: // TCP
 				ss.tcpConn = sc
+				// Start the same RTP-liveness timer used by UDP RECORD sessions.
+				// readPacketRTPTCPRecord updates udpLastPacketTime on each RTP packet;
+				// runInner's udpCheckStreamTimer.C handler closes the session when
+				// no RTP has arrived within ReadTimeout — same behaviour as UDP.
+				ss.udpCheckStreamTimer = time.NewTimer(ss.s.checkStreamPeriod)
 				err = switchReadFuncError{true}
 				// startWriter() is called by ServerConn, through chAsyncStartWriter,
 				// after the response has been sent
@@ -1648,6 +1653,7 @@ func (ss *ServerSession) handleRequestInner(sc *ServerConn, req *base.Request) (
 						ss.udpCheckStreamTimer = emptyTimer()
 
 					default: // TCP
+						ss.udpCheckStreamTimer = emptyTimer()
 						err = switchReadFuncError{false}
 						ss.tcpConn = nil
 					}

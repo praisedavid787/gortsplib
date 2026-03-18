@@ -460,7 +460,12 @@ func (sm *serverSessionMedia) readPacketRTPTCPRecord(payload []byte, addr *net.U
 		return false
 	}
 
-	forma.readPacketRTP(pkt, sm.ss.s.timeNow())
+	now := sm.ss.s.timeNow()
+	// Update liveness timestamp on RTP only — mirrors UDP fix (commit f4d2e401).
+	// RTCP SR must NOT update this; see readPacketRTCPTCPRecord.
+	atomic.StoreInt64(sm.ss.udpLastPacketTime, now.Unix())
+
+	forma.readPacketRTP(pkt, now)
 
 	return true
 }

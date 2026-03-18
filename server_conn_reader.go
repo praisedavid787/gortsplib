@@ -106,14 +106,12 @@ func (cr *serverConnReader) readFuncTCP() error {
 	cr.sc.session.asyncStartWriter()
 
 	for {
-		if cr.sc.session.state == ServerSessionStateRecord {
-			rt := cr.sc.s.ReadTimeout
-			if cr.sc.session.ReadTimeout != 0 {
-				rt = cr.sc.session.ReadTimeout
-			}
-			cr.sc.nconn.SetReadDeadline(time.Now().Add(rt))
-		}
-
+		// Do NOT set a per-read deadline here for RECORD sessions.
+		// TCP RECORD liveness is now tracked by udpLastPacketTime (updated in
+		// readPacketRTPTCPRecord on each RTP packet) and checked by the
+		// udpCheckStreamTimer in runInner — identical to the UDP mechanism.
+		// Setting a deadline on every conn.Read() would reset on RTCP SR and
+		// RTSP OPTIONS, preventing silence activation after the publisher stops.
 		what, err := cr.sc.conn.Read()
 		if err != nil {
 			return err
