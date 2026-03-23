@@ -946,7 +946,11 @@ func (ss *ServerSession) runInner() error {
 
 			// in case of RECORD, timeout happens when no RTP or RTCP packets are being received
 			if ss.state == ServerSessionStateRecord {
-				if now.Sub(time.Unix(lft, 0)) >= ss.s.ReadTimeout {
+				readTimeout := ss.s.ReadTimeout
+				if ss.ReadTimeout != 0 {
+					readTimeout = ss.ReadTimeout
+				}
+				if now.Sub(time.Unix(lft, 0)) >= readTimeout {
 					// best-effort: send a TEARDOWN response to the publisher's TCP
 					// signaling connection before closing, so TCP monitors get a
 					// clean, parseable signal instead of an abrupt RST.
